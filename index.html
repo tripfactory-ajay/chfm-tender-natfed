@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CHFM Tender Pricing Tool</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-box">CHFM</div>
+    <div>
+      <h1>CHFM Tender Pricing Tool</h1>
+      <p>AI-powered NatFed 8 SOR matching &amp; pricing engine</p>
+    </div>
+    <div class="header-meta">
+      <span>CHFM Group</span>
+      <span>Tannochside Business Park, Uddingston</span>
+    </div>
+  </div>
+
+  <!-- STEP BAR -->
+  <div class="step-bar">
+    <div class="step active" id="step-tab-1" onclick="goStep(1)">
+      <span class="num">1</span>Upload Tender
+    </div>
+    <div class="step" id="step-tab-2" onclick="goStep(2)">
+      <span class="num">2</span>Pricing Config
+    </div>
+    <div class="step" id="step-tab-3" onclick="goStep(3)">
+      <span class="num">3</span>AI Matching
+    </div>
+    <div class="step" id="step-tab-4" onclick="goStep(4)">
+      <span class="num">4</span>Review &amp; Export
+    </div>
+  </div>
+
+  <!-- ── STEP 1: Upload ── -->
+  <div class="panel active" id="panel-1">
+    <div class="card">
+      <div class="card-title">Paste tender bill of quantities</div>
+      <p class="hint">Paste line items from your tender document. Each line should include: Ref, Description, Unit, Quantity (separated by two or more spaces or a tab).</p>
+      <textarea id="tender-paste" rows="12"
+        placeholder="Example:
+A  Remove water from solum by means of pumping  Days  3
+B  Supply and install 75mm flexible ducting to services within solum  m  20
+C  Level solum by means of 6-10mm grit/gravel; maximum depth 200mm  m2  70
+D  Supply and install attenuation units wrapped in Terram; 450mm deep x 500mm wide  m2  70
+E  Cover with waterproof membrane; fill with Class C concrete, 150mm thick  m2  70
+F  Supply and install non-return valve in pipework  Nr  1
+G  Supply and install preformed plastic silt trap; maximum depth 600mm  Nr  1
+H  Connect new pipework to existing main line; maximum depth 1200mm  Nr  1"></textarea>
+
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn" onclick="loadSampleTender()">Load sample tender</button>
+        <button class="btn btn-primary" onclick="parseTender()">Parse items →</button>
+      </div>
+    </div>
+
+    <div id="parsed-preview" class="hidden">
+      <div class="card">
+        <div class="card-title">Parsed line items — <span id="item-count">0</span> items found</div>
+        <div id="preview-table-wrap" class="table-scroll"></div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="goStep(2)">Continue to pricing config →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Config ── -->
+  <div class="panel" id="panel-2">
+    <div class="card">
+      <div class="card-title">Pricing adjustment</div>
+      <p class="hint">Set a percentage adjustment to apply to all NatFed 8 base rates. Negative = discount, positive = uplift.</p>
+      <div class="adj-row">
+        <label>Adjustment</label>
+        <input type="range" id="adj-slider" min="-30" max="30" value="-5" step="0.5" oninput="updateAdj()" />
+        <div class="adj-badge neg" id="adj-display">−5.0%</div>
+      </div>
+      <div class="controls-grid">
+        <div>
+          <label>Location / region</label>
+          <select id="region-select">
+            <option>Scotland (default)</option>
+            <option>Central Belt</option>
+            <option>North Lanarkshire</option>
+            <option>Glasgow / Strathclyde</option>
+            <option>Highlands &amp; Islands (+10%)</option>
+            <option>Orkney / Shetland (+20%)</option>
+          </select>
+        </div>
+        <div>
+          <label>Contract type</label>
+          <select id="contract-type">
+            <option>Housing — responsive repairs</option>
+            <option>Housing — voids</option>
+            <option>Housing — planned maintenance</option>
+            <option>Corporate — reactive</option>
+            <option>Corporate — compliance</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">AI model settings</div>
+
+      <!-- Mode toggle -->
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="btn-demo" onclick="setMode('demo')">
+          <span class="mode-icon">&#9654;</span>
+          <span class="mode-label">Demo mode</span>
+          <span class="mode-sub">No API key needed — instant results</span>
+        </button>
+        <button class="mode-btn" id="btn-live" onclick="setMode('live')">
+          <span class="mode-icon">&#9889;</span>
+          <span class="mode-label">Live AI mode</span>
+          <span class="mode-sub">Uses Claude API for real matching</span>
+        </button>
+      </div>
+
+      <!-- Demo notice -->
+      <div id="demo-notice" class="status-msg info" style="margin-top:12px;margin-bottom:0;">
+        Demo mode uses a built-in NatFed 8 SOR lookup table with realistic pre-matched rates.
+        Perfect for presentations and walkthroughs — switch to Live AI for production use.
+      </div>
+
+      <!-- Live API key (hidden in demo) -->
+      <div id="live-api-section" style="display:none;margin-top:12px;">
+        <p class="hint" style="margin-bottom:8px;">
+          The tool uses Claude (claude-sonnet-4-20250514) to match tender descriptions to NatFed 8 SOR codes.
+          Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.
+          Your key is never stored — used only in this browser session.
+        </p>
+        <div class="api-key-row">
+          <input type="password" id="api-key-input" placeholder="Enter your Anthropic API key (sk-ant-...)" />
+          <button class="btn" onclick="toggleApiKeyVis()" id="vis-btn">Show</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="goStep(1)">← Back</button>
+      <button class="btn btn-primary" onclick="startMatching()">Run AI pricing →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: AI Matching ── -->
+  <div class="panel" id="panel-3">
+    <div class="card">
+      <div class="card-title">AI matching progress</div>
+      <div id="match-status" class="status-msg processing">
+        <span class="dots"><span></span><span></span><span></span></span> Preparing to match items...
+      </div>
+      <div id="match-log" class="log-box"></div>
+    </div>
+
+    <div id="match-results-wrap" class="hidden">
+      <div class="card">
+        <div class="card-title">Matched items preview</div>
+        <div id="match-table-wrap" class="table-scroll"></div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="goStep(4)">Review &amp; export →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Review & Export ── -->
+  <div class="panel" id="panel-4">
+    <div class="summary-grid" id="summary-stats"></div>
+
+    <div class="card">
+      <div class="card-title">Final priced bill of quantities</div>
+      <p class="hint">Review all items. Override any rate by editing the Rate field directly. Re-adjust the global percentage using the slider below.</p>
+
+      <div class="adj-row" style="margin-bottom:1rem;">
+        <label>Live adjustment</label>
+        <input type="range" id="adj-slider-2" min="-30" max="30" value="-5" step="0.5" oninput="syncAdj(this.value)" />
+        <div class="adj-badge neg" id="adj-display-2">−5.0%</div>
+      </div>
+
+      <div id="final-table-wrap" class="table-scroll"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Export options</div>
+      <div class="export-grid">
+        <div class="export-card" onclick="exportCSV()">
+          <div class="export-icon">&#x1F4CA;</div>
+          <div class="export-title">Export to CSV</div>
+          <div class="export-desc">Opens in Excel — paste into tender document</div>
+        </div>
+        <div class="export-card" onclick="exportText()">
+          <div class="export-icon">&#x1F4CB;</div>
+          <div class="export-title">Copy as text</div>
+          <div class="export-desc">Tab-separated for quick paste anywhere</div>
+        </div>
+        <div class="export-card" onclick="exportJSON()">
+          <div class="export-icon">&#x1F4C4;</div>
+          <div class="export-title">Export JSON</div>
+          <div class="export-desc">Machine-readable for system integration</div>
+        </div>
+        <div class="export-card" onclick="printView()">
+          <div class="export-icon">&#x1F5A8;</div>
+          <div class="export-title">Print / PDF</div>
+          <div class="export-desc">Browser print dialog — save as PDF</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script src="app.js"></script>
+</body>
+</html>
